@@ -1,13 +1,20 @@
+import os
+from pathlib import Path
+from dotenv import load_dotenv
 import pandas as pd
 from sqlalchemy import create_engine, text
-from pathlib import Path
 
-DB_USER = "postgres"
-DB_PASSWORD = "thai0703"
-DB_HOST = "localhost"
-DB_PORT = "5432"
-DB_NAME = "research_business_db"
+# Load environment variables from .env file
+load_dotenv()
 
+# Retrieve database credentials from environment
+DB_USER = os.getenv("DB_USER")
+DB_PASSWORD = os.getenv("DB_PASSWORD")
+DB_HOST = os.getenv("DB_HOST", "localhost")
+DB_PORT = os.getenv("DB_PORT", "5432")
+DB_NAME = os.getenv("DB_NAME")
+
+# Path setup
 BASE_DIR = Path(__file__).resolve().parent.parent
 CSV_PATH = BASE_DIR / "data" / "small_set_for_thai.csv"
 

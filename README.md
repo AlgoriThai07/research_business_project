@@ -1,61 +1,57 @@
 # Research Business Database Project
 
-This project builds a PostgreSQL database for storing, cleaning, and organizing a historical business dataset. The original dataset is imported from a CSV file into a raw staging table, then cleaned and transformed into smaller relational tables for easier querying and analysis.
+A PostgreSQL and PostGIS data pipeline designed to ingest, clean, and organize a historical business dataset. This project processes wide, unnormalized CSV data via Python, loads it into a PostgreSQL staging table, and executes relational modeling and spatial transformations to prepare the data for downstream analysis.
 
-The project focuses on businesses, their locations, contact information, geocoding data, demographic context, and classification variables related to ownership, audience, and business type.
+---
 
-## Project Overview
+## 💡 System Architecture & Data Flow
 
-The main goal of this project is to convert a wide CSV dataset into a structured relational database.
+```text
+┌─────────────────┐       ┌────────────────────────┐       ┌─────────────────────────┐       ┌───────────────────────────┐
+│                 │       │                        │       │                         │       │   Normalized Relational   │
+│  CSV Source     │ ───►  │  Python (pandas)       │ ───►  │  PostgreSQL             │ ───►  │   Schema                  │
+│  Data           │       │  Cleaning & Parsing    │       │  Staging (raw_businesses)│       │   + PostGIS Geometries    │
+└─────────────────┘       └────────────────────────┘       └─────────────────────────┘       └───────────────────────────┘
+```
 
-The workflow is:
+1. **Ingest & Clean (Python):** Load CSV data, standardize column headers, combine overlapping attributes, and impute missing values.
+2. **Stage (PostgreSQL):** Persist observation-level records into a wide `raw_businesses` staging table to retain raw provenance.
+3. **Normalize (SQL):** Split wide staging records into third-normal-form (3NF) relational sub-tables using SQL transactional logic.
+4. **Spatial Transform (PostGIS):** Parse string-formatted projected coordinates into native PostGIS geometry points (`ESRI:102003`).
 
-1. Load the original CSV file into Python using pandas.
-2. Rename unclear or inconsistent column names.
-3. Combine duplicate or equivalent variables into cleaner columns.
-4. Import the cleaned data into a PostgreSQL raw table.
-5. Use SQL to split the raw table into smaller normalized tables.
-6. Convert raw geometry text into PostGIS geometry objects for spatial analysis.
+---
 
-## Tech Stack
+## 🛠 Tech Stack
 
-- Python
-- pandas
-- SQLAlchemy
-- psycopg2
-- PostgreSQL
-- PostGIS
-- CSV data loading
-- Relational database design
+- **Language:** Python 3.x
+- **Data Processing:** pandas, SQLAlchemy, psycopg2
+- **Database:** PostgreSQL 14+ with PostGIS Extension
+- **Spatial Projection:** USA Contiguous Albers Equal Area Conic (`ESRI:102003` / WGS84 `EPSG:4326`)
 
-## Project Structure
+---
+
+## 📁 Project Structure
 
 ```text
 research_business_db/
 ├── data/
-│   └── small_set_for_thai.csv
+│   └── small_set_for_thai.csv        # Source raw CSV dataset
 ├── scripts/
-│   └── load_raw_businesses.py
+│   └── load_raw_businesses.py        # ETL script for parsing and staging CSV data
 ├── sql/
-│   ├── schema.sql
-│   ├── create_subtables.sql
-│   └── populate_subtables.sql
-└── README.md
+│   ├── schema.sql                    # Schema definition for staging table (`raw_businesses`)
+│   ├── create_subtables.sql          # DDL for normalized relational tables
+│   └── populate_subtables.sql        # DML scripts to transform staging data into normalized tables
+└── README.md                         # Project documentation
 ```
 
-## Database Name
+---
 
-```text
-research_business_db
-```
+## 🛢️ Staging Layer (`raw_businesses`)
 
-## Raw Data Table
+The `raw_businesses` table stores preprocessed, wide-format records directly imported from Python. Preserving this staging layer ensures auditability, allowing for iterative schema redesigns without requiring re-parsing of the raw CSV file.
 
-The main raw import table is `raw_businesses`.
-
-This table stores cleaned but still mostly raw data from the CSV. It keeps one row per business-year observation.
-
-### Example Schema
+### Staging Schema Definition
 
 ```sql
 CREATE TABLE raw_businesses (
@@ -102,7 +98,7 @@ CREATE TABLE raw_businesses (
     glbtqi INTEGER,
     match_distance DOUBLE PRECISION,
     geoauth VARCHAR(50),
-    geometry TEXT,
+    geometry TEXT,                      -- Stored as string prior to PostGIS parsing
     geometry_location_type VARCHAR(100),
     statefp10 VARCHAR(2),
     countyfp10 VARCHAR(3),
@@ -135,71 +131,16 @@ CREATE TABLE raw_businesses (
 );
 ```
 
-## Why Use a Raw Table?
+---
 
-The `raw_businesses` table acts as a staging table.
+## 🧹 Data Ingestion & Preprocessing
 
-It keeps the imported dataset close to its original form while applying basic cleaning, such as:
+The Python script `scripts/load_raw_businesses.py` handles column coalescing prior to database insertion. Legacy or redundant columns are consolidated into single unified variables using `bfill` (backward fill) logic across rows.
 
-- Renaming unclear columns
-- Standardizing column names
-- Combining duplicate variables
-- Preserving the original CSV row index
-- Keeping raw geometry as text before converting it into PostGIS geometry
+### Column Mapping Matrix
 
-This makes the project safer because the original loaded data remains available even after creating smaller cleaned tables.
-
-## Loading Data
-
-The script `load_raw_businesses.py` loads the CSV file into PostgreSQL.
-
-Main steps:
-
-1. Read the CSV file.
-2. Rename columns.
-3. Combine equivalent variables.
-4. Keep only selected columns.
-5. Replace missing values with `NULL`.
-6. Delete old rows from `raw_businesses`.
-7. Append the cleaned dataframe into PostgreSQL.
-
-Example command:
-
-```bash
-python scripts/load_raw_businesses.py
-```
-
-## Column Cleaning
-
-Some columns in the original dataset represent the same concept. These are combined into one cleaner column before loading into the database.
-
-Example:
-
-```python
-df_clean = combine_columns(df_clean, "two_spirit", ["symbol_34", "_TWO_SPIRIT_"])
-```
-
-This creates one cleaned column: `two_spirit`.
-
-The helper function uses the first non-null value from the source columns.
-
-```python
-def combine_columns(df, new_col, source_cols):
-    existing_cols = [col for col in source_cols if col in df.columns]
-
-    if not existing_cols:
-        print(f"Warning: no source columns found for {new_col}: {source_cols}")
-        df[new_col] = None
-        return df
-
-    df[new_col] = df[existing_cols].bfill(axis=1).iloc[:, 0]
-    return df
-```
-
-## Important Cleaned Variables
-
-| Clean Column       | Original Source Columns       |
-| ------------------ | ----------------------------- |
+| Cleaned Variable   | Source Columns Consolidated   |
+| :----------------- | :---------------------------- |
 | `dancing_bar`      | `symbol_14`, `_DANCING_`      |
 | `sports_bar`       | `symbol_15`, `_SPORT_BAR_`    |
 | `video_bar`        | `symbol_16`, `_VIDEO_BAR_`    |
@@ -218,26 +159,44 @@ def combine_columns(df, new_col, source_cols):
 | `queerown`         | `gayown`                      |
 | `queeraud`         | `gayaud`                      |
 
-## Suggested Smaller Tables
+### Python Consolidation Logic
 
-After loading data into `raw_businesses`, the dataset can be split into smaller relational tables.
+```python
+def combine_columns(df: pd.DataFrame, new_col: str, source_cols: list) -> pd.DataFrame:
+    """Coalesces multiple source columns into a single target column using the first non-null value."""
+    existing_cols = [col for col in source_cols if col in df.columns]
 
-Recommended tables:
+    if not existing_cols:
+        print(f"Warning: No source columns found for {new_col}: {source_cols}")
+        df[new_col] = None
+        return df
 
-- `businesses`
-- `business_contacts`
-- `business_geography`
-- `business_bar_attributes`
-- `business_identity_attributes`
-- `business_classification`
-- `metro_areas`
-- `census_context`
+    df[new_col] = df[existing_cols].bfill(axis=1).iloc[:, 0]
+    return df
+```
 
-## 1. Businesses Table
+---
 
-Stores the main business identity information.
+## 📐 Relational Target Schema
+
+After staging, data is split into domain-specific tables to eliminate redundancy and improve query performance.
+
+```text
+                  ┌──────────────────────┐
+                  │      businesses      │ (Core Entity)
+                  └──────────┬───────────┘
+                             │
+     ┌───────────────────────┼───────────────────────┬──────────────────────┐
+     │ 1:1                   │ 1:1                   │ 1:1                  │ 1:1
+┌────┴────────────┐  ┌───────┴──────────┐  ┌─────────┴─────────┐  ┌─────────┴─────────┐
+│business_contacts│  │business_geography│  │business_bar_attrs │  │business_ident_attr│
+└─────────────────┘  └──────────────────┘  └───────────────────┘  └───────────────────┘
+```
+
+### Table Definitions
 
 ```sql
+-- 1. Core Businesses Entity
 CREATE TABLE businesses (
     business_id SERIAL PRIMARY KEY,
     raw_row_id INTEGER UNIQUE REFERENCES raw_businesses(row_id),
@@ -250,16 +209,11 @@ CREATE TABLE businesses (
     category VARCHAR(255),
     org_cat VARCHAR(255)
 );
-```
 
-## 2. Business Contacts Table
-
-Stores contact information.
-
-```sql
+-- 2. Business Contacts
 CREATE TABLE business_contacts (
     contact_id SERIAL PRIMARY KEY,
-    business_id INTEGER UNIQUE REFERENCES businesses(business_id),
+    business_id INTEGER UNIQUE REFERENCES businesses(business_id) ON DELETE CASCADE,
     phone_1 VARCHAR(20),
     phone_2 VARCHAR(20),
     email VARCHAR(100),
@@ -267,16 +221,11 @@ CREATE TABLE business_contacts (
     fax VARCHAR(20),
     full_text TEXT
 );
-```
 
-## 3. Business Geography Table
-
-Stores address, FIPS, CBSA, geocoding, and spatial information.
-
-```sql
+-- 3. Business Spatial & Geographic Attributes
 CREATE TABLE business_geography (
     geography_id SERIAL PRIMARY KEY,
-    business_id INTEGER UNIQUE REFERENCES businesses(business_id),
+    business_id INTEGER UNIQUE REFERENCES businesses(business_id) ON DELETE CASCADE,
     address VARCHAR(255),
     county_name VARCHAR(50),
     state VARCHAR(30),
@@ -290,68 +239,10 @@ CREATE TABLE business_geography (
     geometry geometry(Point, 102003),
     geometry_location_type VARCHAR(100)
 );
-```
 
-## Geometry Handling
-
-In the CSV, geometry appears as text in this format:
-
-```text
-c(-2266671.75280056, 253561.466568569)
-```
-
-This is an R-style coordinate vector, not a PostGIS geometry object.
-
-The coordinates are in the USA_Contiguous_Albers_Equal_Area_Conic projection.
-
-For the raw table, geometry is stored as text:
-
-```sql
-geometry TEXT
-```
-
-When populating `business_geography`, it should be converted into a PostGIS point:
-
-```sql
-ST_SetSRID(
-    ST_MakePoint(x, y),
-    102003
-)
-```
-
-Example conversion:
-
-```sql
-CASE
-    WHEN r.geometry IS NOT NULL AND r.geometry <> ''
-    THEN ST_SetSRID(
-        ST_MakePoint(
-            split_part(
-                replace(replace(replace(r.geometry, 'c(', ''), ')', ''), ' ', ''),
-                ',',
-                1
-            )::DOUBLE PRECISION,
-            split_part(
-                replace(replace(replace(r.geometry, 'c(', ''), ')', ''), ' ', ''),
-                ',',
-                2
-            )::DOUBLE PRECISION
-        ),
-        102003
-    )
-    ELSE NULL
-END AS geometry
-```
-
-    `102003` refers to USA_Contiguous_Albers_Equal_Area_Conic (ESRI:102003), which is used for contiguous U.S. Albers projected coordinates.
-
-## 4. Business Bar Attributes Table
-
-Stores venue-type indicator variables.
-
-```sql
+-- 4. Bar Attributes
 CREATE TABLE business_bar_attributes (
-    business_id INTEGER PRIMARY KEY REFERENCES businesses(business_id),
+    business_id INTEGER PRIMARY KEY REFERENCES businesses(business_id) ON DELETE CASCADE,
     dancing_bar INTEGER,
     sports_bar INTEGER,
     video_bar INTEGER,
@@ -362,15 +253,10 @@ CREATE TABLE business_bar_attributes (
     private_club INTEGER,
     clothing_opt_bar INTEGER
 );
-```
 
-## 5. Business Identity Attributes Table
-
-Stores audience and identity-related indicator variables.
-
-```sql
+-- 5. Identity & Audience Attributes
 CREATE TABLE business_identity_attributes (
-    business_id INTEGER PRIMARY KEY REFERENCES businesses(business_id),
+    business_id INTEGER PRIMARY KEY REFERENCES businesses(business_id) ON DELETE CASCADE,
     asian INTEGER,
     latine INTEGER,
     black INTEGER,
@@ -385,15 +271,10 @@ CREATE TABLE business_identity_attributes (
     gbtqi_men INTEGER,
     glbtqi INTEGER
 );
-```
 
-## 6. Business Classification Table
-
-Stores business classification variables.
-
-```sql
+-- 6. Business Classification
 CREATE TABLE business_classification (
-    business_id INTEGER PRIMARY KEY REFERENCES businesses(business_id),
+    business_id INTEGER PRIMARY KEY REFERENCES businesses(business_id) ON DELETE CASCADE,
     queerown INTEGER,
     queeraud INTEGER,
     core INTEGER,
@@ -401,24 +282,14 @@ CREATE TABLE business_classification (
     entrep INTEGER,
     waffle INTEGER
 );
-```
 
-## 7. Metro Areas Table
-
-Stores CBSA information.
-
-```sql
+-- 7. Metropolitan Statistical Areas (Lookup)
 CREATE TABLE metro_areas (
     cbsa VARCHAR(10) PRIMARY KEY,
     cbsa_name VARCHAR(255)
 );
-```
 
-## 8. Census Context Table
-
-Stores tract-level demographic and socioeconomic variables.
-
-```sql
+-- 8. Census Tract Contextual Demographics
 CREATE TABLE census_context (
     census_context_id SERIAL PRIMARY KEY,
     tractid VARCHAR(50),
@@ -444,169 +315,97 @@ CREATE TABLE census_context (
 );
 ```
 
-## Data Type Decisions
+---
 
-| Data Type          | Used For                                                        |
-| ------------------ | --------------------------------------------------------------- |
-| `INTEGER`          | Counts, flags, binary variables, years                          |
-| `DOUBLE PRECISION` | Percentages, distances, income, rent, continuous numeric values |
-| `VARCHAR`          | Codes, names, categories, IDs                                   |
-| `TEXT`             | Long text fields and raw geometry before conversion             |
-| `GEOMETRY`         | Cleaned spatial data in PostGIS                                 |
+## 🗺️ Spatial Coordinate Parsing (PostGIS)
 
-Important design choices:
+The source CSV provides projected coordinates formatted as R vector strings: `c(-2266671.7528, 253561.4665)`.
 
-- FIPS, ZIP, tract, and CBSA codes are stored as `VARCHAR`, not numbers.
-- Raw geometry is stored as `TEXT`.
-- Cleaned geometry is stored as `geometry(Point, 102003)`.
-- `row_id` is the internal database primary key.
-- `original_index` preserves the original CSV row number.
+During population of the `business_geography` table, these strings are parsed into PostGIS point geometries registered under the **USA Contiguous Albers Equal Area Conic** spatial reference system (`ESRI:102003`).
 
-## Running the Project
-
-### 1. Start PostgreSQL
-
-Make sure PostgreSQL is running locally.
-
-### 2. Create the database
+### SQL Spatial Transformation Query
 
 ```sql
-CREATE DATABASE research_business_db;
+INSERT INTO business_geography (
+    business_id, address, county_name, state, new_state, zip,
+    statefp10, countyfp10, cbsa, match_distance, geoauth,
+    geometry_location_type, geometry
+)
+SELECT
+    b.business_id,
+    r.address,
+    r.county_name,
+    r.state,
+    r.new_state,
+    r.zip,
+    r.statefp10,
+    r.countyfp10,
+    r.cbsa,
+    r.match_distance,
+    r.geoauth,
+    r.geometry_location_type,
+    CASE
+        WHEN r.geometry IS NOT NULL AND r.geometry <> '' AND r.geometry LIKE 'c(%'
+        THEN ST_SetSRID(
+            ST_MakePoint(
+                split_part(replace(replace(replace(r.geometry, 'c(', ''), ')', ''), ' ', ''), ',', 1)::DOUBLE PRECISION,
+                split_part(replace(replace(replace(r.geometry, 'c(', ''), ')', ''), ' ', ''), ',', 2)::DOUBLE PRECISION
+            ),
+            102003
+        )
+        ELSE NULL
+    END AS geometry
+FROM raw_businesses r
+JOIN businesses b ON r.row_id = b.raw_row_id;
 ```
 
-### 3. Enable PostGIS
+---
 
-Connect to the database, then run:
+## 🚀 Execution Guide
 
-```sql
-CREATE EXTENSION IF NOT EXISTS postgis;
-```
+### Prerequisites
 
-### 4. Create the raw table
+- PostgreSQL with PostGIS installed locally or accessible via network.
+- Python 3.8+ with `pandas`, `sqlalchemy`, and `psycopg2`.
 
-Run:
+### Step-by-Step Setup
 
 ```bash
+# 1. Initialize PostgreSQL Database
+psql -U postgres -c "CREATE DATABASE research_business_db;"
+
+# 2. Enable PostGIS Extension
+psql -U postgres -d research_business_db -c "CREATE EXTENSION IF NOT EXISTS postgis;"
+
+# 3. Create Raw Staging Schema
 psql -U postgres -d research_business_db -f sql/schema.sql
-```
 
-### 5. Load the CSV
-
-Run:
-
-```bash
+# 4. Ingest Raw CSV Data
 python scripts/load_raw_businesses.py
-```
 
-### 6. Create smaller tables
-
-Run:
-
-```bash
+# 5. Build Sub-table Schemas
 psql -U postgres -d research_business_db -f sql/create_subtables.sql
-```
 
-### 7. Populate smaller tables
-
-Run:
-
-```bash
+# 6. Transform and Populate Sub-tables
 psql -U postgres -d research_business_db -f sql/populate_subtables.sql
 ```
 
-## Example Queries
+---
 
-View the first few loaded businesses:
+## 🔍 Analytical Query Examples
 
-```sql
-SELECT
-    row_id,
-    business_name,
-    category,
-    city,
-    state,
-    year
-FROM raw_businesses
-LIMIT 10;
-```
+### Geographic Coordinate Conversion (Albers → WGS84 Lat/Long)
 
-Find businesses classified as queer-owned:
-
-```sql
-SELECT
-    business_name,
-    year,
-    state,
-    queerown
-FROM raw_businesses
-WHERE queerown = 1;
-```
-
-Find businesses by CBSA:
-
-```sql
-SELECT
-    business_name,
-    cbsa,
-    cbsa_name
-FROM raw_businesses
-WHERE cbsa IS NOT NULL;
-```
-
-Find businesses with geography converted to longitude and latitude:
+Re-projects internal projected meters to standard GPS coordinates (WGS84 / EPSG:4326) for web mapping or GIS exports.
 
 ```sql
 SELECT
     b.business_name,
+    g.state,
     ST_X(ST_Transform(g.geometry, 4326)) AS longitude,
     ST_Y(ST_Transform(g.geometry, 4326)) AS latitude
 FROM businesses b
-JOIN business_geography g
-    ON b.business_id = g.business_id
-WHERE g.geometry IS NOT NULL;
+JOIN business_geography g ON b.business_id = g.business_id
+WHERE g.geometry IS NOT NULL
+LIMIT 10;
 ```
-
-## Current Progress
-
-Completed:
-
-- Created PostgreSQL database
-- Designed raw table schema
-- Built Python loading script
-- Cleaned and renamed important variables
-- Combined duplicate source columns into cleaner variables
-- Imported CSV data into `raw_businesses`
-- Planned smaller relational tables
-- Designed geometry conversion from text to PostGIS geometry
-
-Next steps:
-
-- Finalize `create_subtables.sql`
-- Finalize `populate_subtables.sql`
-- Test geometry conversion
-- Add indexes for frequently queried columns
-- Write analysis queries for business distribution, classification, and geography
-
-## Future Improvements
-
-Possible improvements:
-
-- Add indexes on `annual_id`, `tractid`, `year`, `cbsa`, and geometry.
-- Use PostGIS spatial indexes for faster geographic queries.
-- Create views for common analysis queries.
-- Validate binary flag columns to ensure they only contain `0`, `1`, or `NULL`.
-- Add automated tests for the loading script.
-- Add a data dictionary based on the variable codebook.
-- Create visualizations using Python or GIS tools.
-
-## Notes
-
-This project is designed to practice the full data engineering workflow:
-
-```text
-CSV → Python cleaning → PostgreSQL raw table → normalized relational tables → spatial analysis
-```
-
-The raw table should preserve the imported data as much as possible, while the smaller subtables should represent the cleaner analytical database structure.
-#   r e s e a r c h _ b u s i n e s s _ p r o j e c t  
- 

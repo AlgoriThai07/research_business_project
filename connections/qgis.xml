@@ -1,0 +1,4 @@
+<!DOCTYPE connections>
+<qgsPgConnections version="1.0">
+    <postgis allowGeometrylessTables="false" database="research_business_db" dontResolveType="false" estimatedMetadata="false" geometryColumnsOnly="false" host="localhost" name="research_business_db" port="5432" projectsInDatabase="false" publicOnly="false" savePassword="false" saveUsername="false" schema="" service="" sslmode="SslPrefer"/>
+</qgsPgConnections>

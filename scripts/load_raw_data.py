@@ -16,7 +16,7 @@ DB_NAME = os.getenv("DB_NAME")
 
 # Path setup
 BASE_DIR = Path(__file__).resolve().parent.parent
-CSV_PATH = BASE_DIR / "data" / "small_set_for_thai.csv"
+CSV_PATH = BASE_DIR / "data" / "dataset.csv"
 
 engine = create_engine(
     f"postgresql+psycopg2://{DB_USER}:{DB_PASSWORD}@{DB_HOST}:{DB_PORT}/{DB_NAME}"
@@ -38,11 +38,11 @@ def get_table_columns(engine, table_name):
 
 
 RAW_BUSINESSES_COLUMN_TYPES = {
-    "original_index": "INTEGER",
     "tractid": "TEXT",
     "year": "INTEGER",
     "id": "TEXT",
     "annual_id": "TEXT",
+    "abb_id": "TEXT",
     "business_name": "TEXT",
     "category": "TEXT",
     "dancing_bar": "INTEGER",
@@ -62,7 +62,6 @@ RAW_BUSINESSES_COLUMN_TYPES = {
     "jewish": "INTEGER",
     "diverse": "INTEGER",
     "phone_1": "TEXT",
-    "phone_2": "TEXT",
     "address": "TEXT",
     "county_name": "TEXT",
     "state": "TEXT",
@@ -84,32 +83,50 @@ RAW_BUSINESSES_COLUMN_TYPES = {
     "geometry_location_type": "TEXT",
     "statefp10": "TEXT",
     "countyfp10": "TEXT",
-    "queerown": "INTEGER",
-    "queeraud": "INTEGER",
-    "core": "INTEGER",
-    "exploit": "INTEGER",
-    "entrep": "INTEGER",
-    "waffle": "INTEGER",
+    "county_fips": "TEXT",
+    "aland10": "BIGINT",
+    "awater10": "BIGINT",
+    "funcstat10": "TEXT",
+    "geocode_type": "TEXT",
+    "gisjoin": "TEXT",
+    "intptlat10": "DOUBLE PRECISION",
+    "intptlon10": "DOUBLE PRECISION",
+    "mtfcc10": "TEXT",
+    "name10": "TEXT",
+    "namelsad10": "TEXT",
+    "shape_area": "DOUBLE PRECISION",
+    "shape_len": "DOUBLE PRECISION",
+    "tractce10": "TEXT",
     "cbsa": "TEXT",
     "cbsa_name": "TEXT",
-    "hinc": "DOUBLE PRECISION",
-    "hu": "INTEGER",
-    "mhmval": "DOUBLE PRECISION",
-    "mrent": "DOUBLE PRECISION",
-    "msa_college": "DOUBLE PRECISION",
-    "msa_income": "DOUBLE PRECISION",
-    "p20old": "DOUBLE PRECISION",
-    "pasian": "DOUBLE PRECISION",
-    "pcol": "DOUBLE PRECISION",
-    "phisp": "DOUBLE PRECISION",
-    "pnhblk": "DOUBLE PRECISION",
-    "pnhwht": "DOUBLE PRECISION",
-    "pop": "INTEGER",
-    "pothrace": "DOUBLE PRECISION",
-    "ppov": "DOUBLE PRECISION",
-    "prenter": "DOUBLE PRECISION",
-    "punemp": "DOUBLE PRECISION",
-    "org_cat": "TEXT",
+    "micropolitan": "TEXT",
+    "outlying": "TEXT",
+    # "queerown": "INTEGER",
+    # "queeraud": "INTEGER",
+    # "core": "INTEGER",
+    # "exploit": "INTEGER",
+    # "entrep": "INTEGER",
+    # "waffle": "INTEGER",
+    # "cbsa": "TEXT",
+    # "cbsa_name": "TEXT",
+    # "hinc": "DOUBLE PRECISION",
+    # "hu": "INTEGER",
+    # "mhmval": "DOUBLE PRECISION",
+    # "mrent": "DOUBLE PRECISION",
+    # "msa_college": "DOUBLE PRECISION",
+    # "msa_income": "DOUBLE PRECISION",
+    # "p20old": "DOUBLE PRECISION",
+    # "pasian": "DOUBLE PRECISION",
+    # "pcol": "DOUBLE PRECISION",
+    # "phisp": "DOUBLE PRECISION",
+    # "pnhblk": "DOUBLE PRECISION",
+    # "pnhwht": "DOUBLE PRECISION",
+    # "pop": "INTEGER",
+    # "pothrace": "DOUBLE PRECISION",
+    # "ppov": "DOUBLE PRECISION",
+    # "prenter": "DOUBLE PRECISION",
+    # "punemp": "DOUBLE PRECISION",
+    # "org_cat": "TEXT",
 }
 
 
@@ -120,7 +137,6 @@ def ensure_raw_businesses_table(engine):
         column_definitions = ["row_id SERIAL PRIMARY KEY"]
         for column_name, sql_type in RAW_BUSINESSES_COLUMN_TYPES.items():
             column_definitions.append(f"{column_name} {sql_type}")
-        column_definitions.append("UNIQUE (annual_id)")
 
         create_table_sql = "CREATE TABLE raw_businesses (\n    " + ",\n    ".join(column_definitions) + "\n)"
 
@@ -145,17 +161,99 @@ def ensure_raw_businesses_table(engine):
                 )
             )
 
-df = pd.read_csv(CSV_PATH)
+
+def make_duplicate_suffix(duplicate_index):
+    suffix = []
+    while duplicate_index > 0:
+        duplicate_index, remainder = divmod(duplicate_index - 1, 26)
+        suffix.append(chr(ord("a") + remainder))
+
+    return "".join(reversed(suffix))
+
+
+def uniquify_duplicate_values(series):
+    seen_counts = {}
+    unique_values = []
+
+    for value in series:
+        if pd.isna(value):
+            unique_values.append(None)
+            continue
+
+        value_text = str(value)
+        duplicate_count = seen_counts.get(value_text, 0)
+
+        if duplicate_count == 0:
+            unique_values.append(value_text)
+        else:
+            unique_values.append(f"{value_text}{make_duplicate_suffix(duplicate_count)}")
+
+        seen_counts[value_text] = duplicate_count + 1
+
+    return pd.Series(unique_values, index=series.index)
+
+df = pd.read_csv(
+    CSV_PATH,
+    encoding="cp1252",
+    index_col=False,
+    low_memory=False,
+    dtype={
+        "ID": "string",
+        "annual_id": "string",
+        "abb_id": "string",
+        "tractid": "string",
+        "STATEFP10": "string",
+        "COUNTYFP10": "string",
+        "county_fips": "string",
+        "FUNCSTAT10": "string",
+        "geocode_type": "string",
+        "GISJOIN": "string",
+        "MTFCC10": "string",
+        "NAME10": "string",
+        "NAMELSAD10": "string",
+        "TRACTCE10": "string",
+        "cbsa": "string",
+        "cbsa_name": "string",
+        "micropolitan": "string",
+        "outlying": "string",
+        "NEW_COUNTY": "string",
+        "Business_name": "string",
+        "NEW_CATEGORY_1": "string",
+        "phone_1": "string",
+        "address": "string",
+        "State": "string",
+        "NEW_STATE": "string",
+        "ZIP": "string",
+        "Email": "string",
+        "www": "string",
+        "Fax": "string",
+        "Text": "string",
+        "geoauth": "string",
+        "geometry": "string",
+        "geometry_location_type": "string",
+    },
+)
 
 print("Original CSV shape:", df.shape)
 print("Original CSV columns:", list(df.columns))
 
 df_clean = df.rename(columns={
-    "Unnamed: 0": "original_index",
     "ID": "id",
     "Business_name": "business_name",
     "STATEFP10": "statefp10",
     "COUNTYFP10": "countyfp10",
+    "ALAND10": "aland10",
+    "AWATER10": "awater10",
+    "FUNCSTAT10": "funcstat10",
+    "GISJOIN": "gisjoin",
+    "INTPTLAT10": "intptlat10",
+    "INTPTLON10": "intptlon10",
+    "MTFCC10": "mtfcc10",
+    "NAME10": "name10",
+    "NAMELSAD10": "namelsad10",
+    "Shape_area": "shape_area",
+    "Shape_len": "shape_len",
+    "TRACTCE10": "tractce10",
     "NEW_CATEGORY_1": "category",
     "NEW_COUNTY": "county_name",
     "State": "state",
@@ -167,8 +265,8 @@ df_clean = df.rename(columns={
     "www": "website",
     "Fax": "fax",
     "Text": "full_text",
-    "gayown": "queerown",
-    "gayaud": "queeraud",
+    # "gayown": "queerown",
+    # "gayaud": "queeraud",
     "symbol_35": "jewish"
 })
 
@@ -212,11 +310,11 @@ df_clean = combine_columns(df_clean, "all_men", ["ALL_MEN", "_ALL_M_"])
 df_clean = combine_columns(df_clean, "all_women", ["ALL_WOMEN", "_ALL_W_"])
 
 expected_columns = [
-    "original_index",
     "tractid",
     "year",
     "id",
     "annual_id",
+    "abb_id",
     "business_name",
     "category",
     "dancing_bar",
@@ -236,7 +334,6 @@ expected_columns = [
     "jewish",
     "diverse",
     "phone_1",
-    "phone_2",
     "address",
     "county_name",
     "state",
@@ -258,42 +355,64 @@ expected_columns = [
     "geometry_location_type",
     "statefp10",
     "countyfp10",
-    "queerown",
-    "queeraud",
-    "core",
-    "exploit",
-    "entrep",
-    "waffle",
+    "county_fips",
+    "aland10",
+    "awater10",
+    "funcstat10",
+    "geocode_type",
+    "gisjoin",
+    "intptlat10",
+    "intptlon10",
+    "mtfcc10",
+    "name10",
+    "namelsad10",
+    "shape_area",
+    "shape_len",
+    "tractce10",
     "cbsa",
     "cbsa_name",
-    "hinc",
-    "hu",
-    "mhmval",
-    "mrent",
-    "msa_college",
-    "msa_income",
-    "p20old",
-    "pasian",
-    "pcol",
-    "phisp",
-    "pnhblk",
-    "pnhwht",
-    "pop",
-    "pothrace",
-    "ppov",
-    "prenter",
-    "punemp",
-    "org_cat",
+    "micropolitan",
+    "outlying",
+    # "queerown",
+    # "queeraud",
+    # "core",
+    # "exploit",
+    # "entrep",
+    # "waffle",
+    # "hinc",
+    # "hu",
+    # "mhmval",
+    # "mrent",
+    # "msa_college",
+    # "msa_income",
+    # "p20old",
+    # "pasian",
+    # "pcol",
+    # "phisp",
+    # "pnhblk",
+    # "pnhwht",
+    # "pop",
+    # "pothrace",
+    # "ppov",
+    # "prenter",
+    # "punemp",
+    # "org_cat",
 ]
+
+for column_name in expected_columns:
+    if column_name not in df_clean.columns:
+        df_clean[column_name] = None
+
+df_clean["annual_id"] = uniquify_duplicate_values(df_clean["annual_id"])
 
 ensure_raw_businesses_table(engine)
 
 columns_to_keep = [
-    "original_index",
     "tractid",
     "year",
     "id",
     "annual_id",
+    "abb_id",
 
     "business_name",
     "category",
@@ -317,7 +436,6 @@ columns_to_keep = [
     "diverse",
 
     "phone_1",
-    "phone_2",
     "address",
     "county_name",
     "state",
@@ -342,36 +460,51 @@ columns_to_keep = [
     "geometry_location_type",
     "statefp10",
     "countyfp10",
-
-    "queerown",
-    "queeraud",
-    "core",
-    "exploit",
-    "entrep",
-    "waffle",
-
+    "county_fips",
+    "aland10",
+    "awater10",
+    "funcstat10",
+    "geocode_type",
+    "gisjoin",
+    "intptlat10",
+    "intptlon10",
+    "mtfcc10",
+    "name10",
+    "namelsad10",
+    "shape_area",
+    "shape_len",
+    "tractce10",
     "cbsa",
     "cbsa_name",
+    "micropolitan",
+    "outlying",
 
-    "hinc",
-    "hu",
-    "mhmval",
-    "mrent",
-    "msa_college",
-    "msa_income",
-    "p20old",
-    "pasian",
-    "pcol",
-    "phisp",
-    "pnhblk",
-    "pnhwht",
-    "pop",
-    "pothrace",
-    "ppov",
-    "prenter",
-    "punemp",
+    # "queerown",
+    # "queeraud",
+    # "core",
+    # "exploit",
+    # "entrep",
+    # "waffle",
 
-    "org_cat"
+    # "hinc",
+    # "hu",
+    # "mhmval",
+    # "mrent",
+    # "msa_college",
+    # "msa_income",
+    # "p20old",
+    # "pasian",
+    # "pcol",
+    # "phisp",
+    # "pnhblk",
+    # "pnhwht",
+    # "pop",
+    # "pothrace",
+    # "ppov",
+    # "prenter",
+    # "punemp",
+
+    # "org_cat"
 ]
 
 missing_columns = [col for col in columns_to_keep if col not in df_clean.columns]
@@ -384,10 +517,24 @@ df_clean = df_clean[columns_to_keep]
 # Convert NaN values into None, which PostgreSQL stores as NULL
 df_clean = df_clean.where(pd.notnull(df_clean), None)
 
+integer_columns = [
+    column_name
+    for column_name, sql_type in RAW_BUSINESSES_COLUMN_TYPES.items()
+    if sql_type in {"INTEGER", "BIGINT"} and column_name in df_clean.columns
+]
+
+for column_name in integer_columns:
+    df_clean[column_name] = (
+        df_clean[column_name]
+        .replace({True: 1, False: 0})
+        .pipe(pd.to_numeric, errors="coerce")
+        .astype("Int64")
+    )
+
 print("Cleaned dataframe shape:", df_clean.shape)
 
 with engine.begin() as conn:
-    conn.execute(text("DELETE FROM raw_businesses;"))
+    conn.execute(text("TRUNCATE TABLE raw_businesses RESTART IDENTITY CASCADE;"))
 
 df_clean.to_sql(
     "raw_businesses",

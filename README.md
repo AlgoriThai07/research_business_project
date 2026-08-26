@@ -56,7 +56,6 @@ The `raw_businesses` table stores preprocessed, wide-format records directly imp
 ```sql
 CREATE TABLE raw_businesses (
     row_id SERIAL PRIMARY KEY,
-    original_index INTEGER,
     tractid VARCHAR(50),
     year INTEGER,
     id VARCHAR(255),
@@ -80,7 +79,6 @@ CREATE TABLE raw_businesses (
     jewish INTEGER,
     diverse INTEGER,
     phone_1 VARCHAR(20),
-    phone_2 VARCHAR(20),
     address VARCHAR(255),
     county_name VARCHAR(50),
     state VARCHAR(30),
@@ -102,32 +100,8 @@ CREATE TABLE raw_businesses (
     geometry_location_type VARCHAR(100),
     statefp10 VARCHAR(2),
     countyfp10 VARCHAR(3),
-    queerown INTEGER,
-    queeraud INTEGER,
-    core INTEGER,
-    exploit INTEGER,
-    entrep INTEGER,
-    waffle INTEGER,
-    cbsa VARCHAR(10),
-    cbsa_name VARCHAR(255),
-    hinc DOUBLE PRECISION,
-    hu INTEGER,
-    mhmval DOUBLE PRECISION,
-    mrent DOUBLE PRECISION,
-    msa_college DOUBLE PRECISION,
-    msa_income DOUBLE PRECISION,
-    p20old DOUBLE PRECISION,
-    pasian DOUBLE PRECISION,
-    pcol DOUBLE PRECISION,
-    phisp DOUBLE PRECISION,
-    pnhblk DOUBLE PRECISION,
-    pnhwht DOUBLE PRECISION,
-    pop INTEGER,
-    pothrace DOUBLE PRECISION,
-    ppov DOUBLE PRECISION,
-    prenter DOUBLE PRECISION,
-    punemp DOUBLE PRECISION,
-    org_cat VARCHAR(255)
+    -- cbsa VARCHAR(10),
+    -- cbsa_name VARCHAR(255)
 );
 ```
 
@@ -156,8 +130,6 @@ The Python script `scripts/load_raw_businesses.py` handles column coalescing pri
 | `poc`              | `symbol_33`, `_PEOPLE_COLOR_` |
 | `two_spirit`       | `symbol_34`, `_TWO_SPIRIT_`   |
 | `diverse`          | `symbol_36`, `_DIVERSE_`      |
-| `queerown`         | `gayown`                      |
-| `queeraud`         | `gayaud`                      |
 
 ### Python Consolidation Logic
 
@@ -200,14 +172,12 @@ After staging, data is split into domain-specific tables to eliminate redundancy
 CREATE TABLE businesses (
     business_id SERIAL PRIMARY KEY,
     raw_row_id INTEGER UNIQUE REFERENCES raw_businesses(row_id),
-    original_index INTEGER,
     tractid VARCHAR(50),
     year INTEGER,
     source_id VARCHAR(255),
-    annual_id VARCHAR(255) UNIQUE,
+    annual_id VARCHAR(255),
     business_name VARCHAR(255),
-    category VARCHAR(255),
-    org_cat VARCHAR(255)
+    category VARCHAR(255)
 );
 
 -- 2. Business Contacts
@@ -215,7 +185,6 @@ CREATE TABLE business_contacts (
     contact_id SERIAL PRIMARY KEY,
     business_id INTEGER UNIQUE REFERENCES businesses(business_id) ON DELETE CASCADE,
     phone_1 VARCHAR(20),
-    phone_2 VARCHAR(20),
     email VARCHAR(100),
     website VARCHAR(255),
     fax VARCHAR(20),
@@ -233,7 +202,7 @@ CREATE TABLE business_geography (
     zip VARCHAR(10),
     statefp10 VARCHAR(2),
     countyfp10 VARCHAR(3),
-    cbsa VARCHAR(10),
+    -- cbsa VARCHAR(10),
     match_distance DOUBLE PRECISION,
     geoauth VARCHAR(50),
     geometry geometry(Point, 102003),
@@ -272,45 +241,19 @@ CREATE TABLE business_identity_attributes (
     glbtqi INTEGER
 );
 
--- 6. Business Classification
-CREATE TABLE business_classification (
-    business_id INTEGER PRIMARY KEY REFERENCES businesses(business_id) ON DELETE CASCADE,
-    queerown INTEGER,
-    queeraud INTEGER,
-    core INTEGER,
-    exploit INTEGER,
-    entrep INTEGER,
-    waffle INTEGER
-);
+-- 6. Metropolitan Statistical Areas (Lookup)
+-- CREATE TABLE metro_areas (
+--     cbsa VARCHAR(10) PRIMARY KEY,
+--     cbsa_name VARCHAR(255)
+-- );
 
--- 7. Metropolitan Statistical Areas (Lookup)
-CREATE TABLE metro_areas (
-    cbsa VARCHAR(10) PRIMARY KEY,
-    cbsa_name VARCHAR(255)
-);
-
--- 8. Census Tract Contextual Demographics
-CREATE TABLE census_context (
-    census_context_id SERIAL PRIMARY KEY,
+-- 7. Census Tract Contextual Demographics
+CREATE TABLE tract_year_context (
+    tract_year_id SERIAL PRIMARY KEY,
     tractid VARCHAR(50),
     year INTEGER,
-    hinc DOUBLE PRECISION,
-    hu INTEGER,
-    mhmval DOUBLE PRECISION,
-    mrent DOUBLE PRECISION,
-    msa_college DOUBLE PRECISION,
-    msa_income DOUBLE PRECISION,
-    p20old DOUBLE PRECISION,
-    pasian DOUBLE PRECISION,
-    pcol DOUBLE PRECISION,
-    phisp DOUBLE PRECISION,
-    pnhblk DOUBLE PRECISION,
-    pnhwht DOUBLE PRECISION,
-    pop INTEGER,
-    pothrace DOUBLE PRECISION,
-    ppov DOUBLE PRECISION,
-    prenter DOUBLE PRECISION,
-    punemp DOUBLE PRECISION,
+    statefp10 VARCHAR(2),
+    countyfp10 VARCHAR(3),
     UNIQUE (tractid, year)
 );
 ```
@@ -328,7 +271,7 @@ During population of the `business_geography` table, these strings are parsed in
 ```sql
 INSERT INTO business_geography (
     business_id, address, county_name, state, new_state, zip,
-    statefp10, countyfp10, cbsa, match_distance, geoauth,
+    statefp10, countyfp10, match_distance, geoauth,
     geometry_location_type, geometry
 )
 SELECT
@@ -340,7 +283,6 @@ SELECT
     r.zip,
     r.statefp10,
     r.countyfp10,
-    r.cbsa,
     r.match_distance,
     r.geoauth,
     r.geometry_location_type,
@@ -381,13 +323,13 @@ psql -U postgres -d research_business_db -c "CREATE EXTENSION IF NOT EXISTS post
 psql -U postgres -d research_business_db -f sql/schema.sql
 
 # 4. Ingest Raw CSV Data
-python scripts/load_raw_businesses.py
+python scripts/load_raw_data.py
 
-# 5. Build Sub-table Schemas
-psql -U postgres -d research_business_db -f sql/create_subtables.sql
+# 5. Transform and Populate Sub-tables
+psql -U postgres -d research_business_db -f sql/populate_clean_tables.sql
 
-# 6. Transform and Populate Sub-tables
-psql -U postgres -d research_business_db -f sql/populate_subtables.sql
+# 6. Create Indexes for Tables
+psql -U postgres -d research_business_db -f sql/indexes.sql
 ```
 
 ---

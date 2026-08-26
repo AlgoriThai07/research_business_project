@@ -1,41 +1,77 @@
+SELECT
+    cbsa,
+    COUNT(*) AS source_rows
+FROM raw_businesses
+WHERE NULLIF(trim(cbsa), '') IS NOT NULL
+GROUP BY cbsa
+HAVING COUNT(DISTINCT (cbsa_name, micropolitan, lower(trim(outlying)))) > 1
+ORDER BY cbsa;
+
+WITH metro_source AS (
+    SELECT DISTINCT ON (cbsa)
+        cbsa,
+        cbsa_name,
+        micropolitan,
+        CASE lower(trim(outlying))
+            WHEN 'true' THEN TRUE
+            WHEN 't' THEN TRUE
+            WHEN 'yes' THEN TRUE
+            WHEN 'y' THEN TRUE
+            WHEN '1' THEN TRUE
+            WHEN 'false' THEN FALSE
+            WHEN 'f' THEN FALSE
+            WHEN 'no' THEN FALSE
+            WHEN 'n' THEN FALSE
+            WHEN '0' THEN FALSE
+            ELSE NULL
+        END AS outlying
+    FROM raw_businesses
+    WHERE NULLIF(trim(cbsa), '') IS NOT NULL
+    ORDER BY cbsa, row_id
+)
+INSERT INTO metro_areas (
+    cbsa,
+    cbsa_name,
+    micropolitan,
+    outlying
+)
+SELECT
+    cbsa,
+    cbsa_name,
+    micropolitan,
+    outlying
+FROM metro_source
+ON CONFLICT (cbsa) DO UPDATE SET
+    cbsa_name = EXCLUDED.cbsa_name,
+    micropolitan = EXCLUDED.micropolitan,
+    outlying = EXCLUDED.outlying;
+
 INSERT INTO businesses (
     raw_row_id,
-    original_index,
     tractid,
     year,
     source_id,
     annual_id,
+    abb_id,
     business_name,
-    category,
-    org_cat
+    category
+    -- org_cat
 )
 SELECT
     row_id,
-    original_index,
     tractid,
     year,
     id,
     annual_id,
+    abb_id,
     business_name,
-    category,
-    org_cat
+    category
+    -- org_cat
 FROM raw_businesses;
-
-INSERT INTO metro_areas (
-    cbsa,
-    cbsa_name
-)
-SELECT DISTINCT
-    cbsa,
-    cbsa_name
-FROM raw_businesses
-WHERE cbsa IS NOT NULL
-ON CONFLICT (cbsa) DO NOTHING;
 
 INSERT INTO business_contacts (
     business_id,
     phone_1,
-    phone_2,
     email,
     website,
     fax,
@@ -44,7 +80,6 @@ INSERT INTO business_contacts (
 SELECT
     b.business_id,
     r.phone_1,
-    r.phone_2,
     r.email,
     r.website,
     r.fax,
@@ -85,16 +120,14 @@ SELECT
         WHEN r.geometry IS NOT NULL AND r.geometry <> ''
         THEN ST_SetSRID(
             ST_MakePoint(
-                split_part(
-                    replace(replace(replace(r.geometry, 'c(', ''), ')', ''), ' ', ''),
-                    ',',
-                    1
-                )::DOUBLE PRECISION,
-                split_part(
-                    replace(replace(replace(r.geometry, 'c(', ''), ')', ''), ' ', ''),
-                    ',',
-                    2
-                )::DOUBLE PRECISION
+                (regexp_match(
+                    r.geometry,
+                    'c\(\s*([+-]?[0-9]+(?:\.[0-9]+)?)\s*,\s*([+-]?[0-9]+(?:\.[0-9]+)?)\s*\)'
+                ))[1]::DOUBLE PRECISION,
+                (regexp_match(
+                    r.geometry,
+                    'c\(\s*([+-]?[0-9]+(?:\.[0-9]+)?)\s*,\s*([+-]?[0-9]+(?:\.[0-9]+)?)\s*\)'
+                ))[2]::DOUBLE PRECISION
             ),
             102003
         )
@@ -168,75 +201,119 @@ FROM raw_businesses r
 JOIN businesses b
     ON b.raw_row_id = r.row_id;
 
-INSERT INTO business_classification (
-    business_id,
-    queerown,
-    queeraud,
-    core,
-    exploit,
-    entrep,
-    waffle
-)
+-- INSERT INTO business_classification (
+--     business_id,
+--     queerown,
+--     queeraud,
+--     core,
+--     exploit,
+--     entrep,
+--     waffle
+-- )
+-- SELECT
+--     b.business_id,
+--     r.queerown,
+--     r.queeraud,
+--     r.core,
+--     r.exploit,
+--     r.entrep,
+--     r.waffle
+-- FROM raw_businesses r
+-- JOIN businesses b
+--     ON b.raw_row_id = r.row_id;
+
 SELECT
-    b.business_id,
-    r.queerown,
-    r.queeraud,
-    r.core,
-    r.exploit,
-    r.entrep,
-    r.waffle
-FROM raw_businesses r
-JOIN businesses b
-    ON b.raw_row_id = r.row_id;
+    tractid,
+    year,
+    COUNT(*) AS source_rows
+FROM raw_businesses
+WHERE tractid IS NOT NULL
+  AND year IS NOT NULL
+GROUP BY tractid, year
+HAVING COUNT(DISTINCT (
+    county_fips, aland10, awater10, funcstat10, geocode_type, gisjoin,
+    intptlat10, intptlon10, mtfcc10, name10, namelsad10, shape_area,
+    shape_len, tractce10, cbsa
+)) > 1
+ORDER BY tractid, year;
 
 INSERT INTO tract_year_context (
     tractid,
     year,
     statefp10,
     countyfp10,
-    cbsa,
-    hinc,
-    hu,
-    mhmval,
-    mrent,
-    msa_college,
-    msa_income,
-    p20old,
-    pasian,
-    pcol,
-    phisp,
-    pnhblk,
-    pnhwht,
-    pop,
-    pothrace,
-    ppov,
-    prenter,
-    punemp
+    county_fips,
+    aland10,
+    awater10,
+    funcstat10,
+    geocode_type,
+    gisjoin,
+    intptlat10,
+    intptlon10,
+    mtfcc10,
+    name10,
+    namelsad10,
+    shape_area,
+    shape_len,
+    tractce10,
+    cbsa
+    -- hinc,
+    -- hu,
+    -- mhmval,
+    -- mrent,
+    -- msa_college,
+    -- msa_income,
+    -- p20old,
+    -- pasian,
+    -- pcol,
+    -- phisp,
+    -- pnhblk,
+    -- pnhwht,
+    -- pop,
+    -- pothrace,
+    -- ppov,
+    -- prenter,
+    -- punemp
 )
-SELECT DISTINCT
+SELECT DISTINCT ON (tractid, year)
     tractid,
     year,
     statefp10,
     countyfp10,
-    cbsa,
-    hinc,
-    hu,
-    mhmval,
-    mrent,
-    msa_college,
-    msa_income,
-    p20old,
-    pasian,
-    pcol,
-    phisp,
-    pnhblk,
-    pnhwht,
-    pop,
-    pothrace,
-    ppov,
-    prenter,
-    punemp
+    county_fips,
+    aland10,
+    awater10,
+    funcstat10,
+    geocode_type,
+    gisjoin,
+    intptlat10,
+    intptlon10,
+    mtfcc10,
+    name10,
+    namelsad10,
+    shape_area,
+    shape_len,
+    tractce10,
+    cbsa
+    -- hinc,
+    -- hu,
+    -- mhmval,
+    -- mrent,
+    -- msa_college,
+    -- msa_income,
+    -- p20old,
+    -- pasian,
+    -- pcol,
+    -- phisp,
+    -- pnhblk,
+    -- pnhwht,
+    -- pop,
+    -- pothrace,
+    -- ppov,
+    -- prenter,
+    -- punemp
 FROM raw_businesses
 WHERE tractid IS NOT NULL
   AND year IS NOT NULL
+ORDER BY tractid, year, row_id
 ON CONFLICT (tractid, year) DO NOTHING;

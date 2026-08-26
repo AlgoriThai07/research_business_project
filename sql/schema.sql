@@ -5,12 +5,11 @@ DROP TABLE IF EXISTS raw_businesses CASCADE;
 
 CREATE TABLE raw_businesses (
     row_id SERIAL PRIMARY KEY,
-
-    original_index INTEGER,
     tractid VARCHAR(50),
     year INTEGER,
     id VARCHAR(255),
-    annual_id VARCHAR(255) UNIQUE,
+    annual_id VARCHAR(255),
+    abb_id VARCHAR(50),
 
     business_name VARCHAR(255),
     category VARCHAR(255),
@@ -32,7 +31,6 @@ CREATE TABLE raw_businesses (
     jewish INTEGER,
     diverse INTEGER,
     phone_1 VARCHAR(20),
-    phone_2 VARCHAR(20),
     address VARCHAR(255),
     county_name VARCHAR(50),
     state VARCHAR(30),
@@ -55,32 +53,48 @@ CREATE TABLE raw_businesses (
     geometry_location_type VARCHAR(100),
     statefp10 VARCHAR(2),
     countyfp10 VARCHAR(3),
-    queerown INTEGER,
-    queeraud INTEGER,
-    core INTEGER,
-    exploit INTEGER,
-    entrep INTEGER,
-    waffle INTEGER,
+    county_fips VARCHAR(5),
+    aland10 BIGINT,
+    awater10 BIGINT,
+    funcstat10 VARCHAR(1),
+    geocode_type VARCHAR(50),
+    gisjoin VARCHAR(20),
+    intptlat10 DOUBLE PRECISION,
+    intptlon10 DOUBLE PRECISION,
+    mtfcc10 VARCHAR(10),
+    name10 VARCHAR(20),
+    namelsad10 VARCHAR(100),
+    shape_area DOUBLE PRECISION,
+    shape_len DOUBLE PRECISION,
+    tractce10 VARCHAR(6),
     cbsa VARCHAR(10),
     cbsa_name VARCHAR(255),
-    hinc DOUBLE PRECISION,
-    hu INTEGER,
-    mhmval DOUBLE PRECISION,
-    mrent DOUBLE PRECISION,
-    msa_college DOUBLE PRECISION,
-    msa_income DOUBLE PRECISION,
-    p20old DOUBLE PRECISION,
-    pasian DOUBLE PRECISION,
-    pcol DOUBLE PRECISION,
-    phisp DOUBLE PRECISION,
-    pnhblk DOUBLE PRECISION,
-    pnhwht DOUBLE PRECISION,
-    pop INTEGER,
-    pothrace DOUBLE PRECISION,
-    ppov DOUBLE PRECISION,
-    prenter DOUBLE PRECISION,
-    punemp DOUBLE PRECISION,
-    org_cat VARCHAR(255)
+    micropolitan VARCHAR(100),
+    outlying VARCHAR(20)
+    -- queerown INTEGER,
+    -- queeraud INTEGER,
+    -- core INTEGER,
+    -- exploit INTEGER,
+    -- entrep INTEGER,
+    -- waffle INTEGER,
+    -- hinc DOUBLE PRECISION,
+    -- hu INTEGER,
+    -- mhmval DOUBLE PRECISION,
+    -- mrent DOUBLE PRECISION,
+    -- msa_college DOUBLE PRECISION,
+    -- msa_income DOUBLE PRECISION,
+    -- p20old DOUBLE PRECISION,
+    -- pasian DOUBLE PRECISION,
+    -- pcol DOUBLE PRECISION,
+    -- phisp DOUBLE PRECISION,
+    -- pnhblk DOUBLE PRECISION,
+    -- pnhwht DOUBLE PRECISION,
+    -- pop INTEGER,
+    -- pothrace DOUBLE PRECISION,
+    -- ppov DOUBLE PRECISION,
+    -- prenter DOUBLE PRECISION,
+    -- punemp DOUBLE PRECISION,
+    -- org_cat VARCHAR(255)
 );
 
 DROP TABLE IF EXISTS business_year_records CASCADE;
@@ -98,17 +112,16 @@ CREATE TABLE businesses (
     business_id SERIAL PRIMARY KEY,
 
     raw_row_id INTEGER UNIQUE REFERENCES raw_businesses(row_id),
-
-    original_index INTEGER,
     tractid VARCHAR(50),
     year INTEGER,
 
     source_id VARCHAR(255),
-    annual_id VARCHAR(255) UNIQUE,
+    annual_id VARCHAR(255),
+    abb_id VARCHAR(50),
 
     business_name VARCHAR(255),
-    category VARCHAR(255),
-    org_cat VARCHAR(255)
+    category VARCHAR(255)
+    -- org_cat VARCHAR(255)
 );
 
 CREATE TABLE business_contacts (
@@ -117,7 +130,6 @@ CREATE TABLE business_contacts (
     business_id INTEGER UNIQUE REFERENCES businesses(business_id),
 
     phone_1 VARCHAR(20),
-    phone_2 VARCHAR(20),
     email VARCHAR(100),
     website VARCHAR(255),
     fax VARCHAR(20),
@@ -126,7 +138,9 @@ CREATE TABLE business_contacts (
 
 CREATE TABLE metro_areas (
     cbsa VARCHAR(10) PRIMARY KEY,
-    cbsa_name VARCHAR(255)
+    cbsa_name VARCHAR(255),
+    micropolitan VARCHAR(100),
+    outlying BOOLEAN
 );
 
 CREATE TABLE business_geography (
@@ -184,16 +198,16 @@ CREATE TABLE business_identity_attributes (
     lbtqi_w INTEGER
 );
 
-CREATE TABLE business_classification (
-    business_id INTEGER PRIMARY KEY REFERENCES businesses(business_id),
+-- CREATE TABLE business_classification (
+--     business_id INTEGER PRIMARY KEY REFERENCES businesses(business_id),
 
-    queerown INTEGER,
-    queeraud INTEGER,
-    core INTEGER,
-    exploit INTEGER,
-    entrep INTEGER,
-    waffle INTEGER
-);
+--     queerown INTEGER,
+--     queeraud INTEGER,
+--     core INTEGER,
+--     exploit INTEGER,
+--     entrep INTEGER,
+--     waffle INTEGER
+-- );
 
 CREATE TABLE tract_year_context (
     tract_year_id SERIAL PRIMARY KEY,
@@ -203,26 +217,40 @@ CREATE TABLE tract_year_context (
 
     statefp10 VARCHAR(2),
     countyfp10 VARCHAR(3),
-    cbsa VARCHAR(10) REFERENCES metro_areas(cbsa),
+    county_fips VARCHAR(5),
+    aland10 BIGINT,
+    awater10 BIGINT,
+    funcstat10 VARCHAR(1),
+    geocode_type VARCHAR(50),
+    gisjoin VARCHAR(20),
+    intptlat10 DOUBLE PRECISION,
+    intptlon10 DOUBLE PRECISION,
+    mtfcc10 VARCHAR(10),
+    name10 VARCHAR(20),
+    namelsad10 VARCHAR(100),
+    shape_area DOUBLE PRECISION,
+    shape_len DOUBLE PRECISION,
+    tractce10 VARCHAR(6),
+    cbsa VARCHAR(10) REFERENCES metro_areas(cbsa)
 
-    hinc DOUBLE PRECISION,
-    hu INTEGER,
-    mhmval DOUBLE PRECISION,
-    mrent DOUBLE PRECISION,
-    msa_college DOUBLE PRECISION,
-    msa_income DOUBLE PRECISION,
+    -- hinc DOUBLE PRECISION,
+    -- hu INTEGER,
+    -- mhmval DOUBLE PRECISION,
+    -- mrent DOUBLE PRECISION,
+    -- msa_college DOUBLE PRECISION,
+    -- msa_income DOUBLE PRECISION,
 
-    p20old DOUBLE PRECISION,
-    pasian DOUBLE PRECISION,
-    pcol DOUBLE PRECISION,
-    phisp DOUBLE PRECISION,
-    pnhblk DOUBLE PRECISION,
-    pnhwht DOUBLE PRECISION,
-    pop INTEGER,
-    pothrace DOUBLE PRECISION,
-    ppov DOUBLE PRECISION,
-    prenter DOUBLE PRECISION,
-    punemp DOUBLE PRECISION,
+    -- p20old DOUBLE PRECISION,
+    -- pasian DOUBLE PRECISION,
+    -- pcol DOUBLE PRECISION,
+    -- phisp DOUBLE PRECISION,
+    -- pnhblk DOUBLE PRECISION,
+    -- pnhwht DOUBLE PRECISION,
+    -- pop INTEGER,
+    -- pothrace DOUBLE PRECISION,
+    -- ppov DOUBLE PRECISION,
+    -- prenter DOUBLE PRECISION,
+    -- punemp DOUBLE PRECISION,
 
     UNIQUE (tractid, year)
 );

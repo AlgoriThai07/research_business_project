@@ -42,7 +42,6 @@ RAW_BUSINESSES_COLUMN_TYPES = {
     "year": "INTEGER",
     "id": "TEXT",
     "annual_id": "TEXT",
-    "abb_id": "TEXT",
     "business_name": "TEXT",
     "category": "TEXT",
     "dancing_bar": "INTEGER",
@@ -200,7 +199,6 @@ df = pd.read_csv(
     dtype={
         "ID": "string",
         "annual_id": "string",
-        "abb_id": "string",
         "tractid": "string",
         "STATEFP10": "string",
         "COUNTYFP10": "string",
@@ -314,7 +312,6 @@ expected_columns = [
     "year",
     "id",
     "annual_id",
-    "abb_id",
     "business_name",
     "category",
     "dancing_bar",
@@ -412,7 +409,6 @@ columns_to_keep = [
     "year",
     "id",
     "annual_id",
-    "abb_id",
 
     "business_name",
     "category",

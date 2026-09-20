@@ -9,7 +9,6 @@ CREATE TABLE raw_businesses (
     year INTEGER,
     id VARCHAR(255),
     annual_id VARCHAR(255),
-    abb_id VARCHAR(50),
 
     business_name VARCHAR(255),
     category VARCHAR(255),
@@ -117,7 +116,6 @@ CREATE TABLE businesses (
 
     source_id VARCHAR(255),
     annual_id VARCHAR(255),
-    abb_id VARCHAR(50),
 
     business_name VARCHAR(255),
     category VARCHAR(255)
@@ -140,7 +138,7 @@ CREATE TABLE metro_areas (
     cbsa VARCHAR(10) PRIMARY KEY,
     cbsa_name VARCHAR(255),
     micropolitan VARCHAR(100),
-    outlying BOOLEAN
+    is_outlying BOOLEAN
 );
 
 CREATE TABLE business_geography (

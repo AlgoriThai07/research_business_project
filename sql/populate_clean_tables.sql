@@ -1,30 +1,13 @@
-SELECT
-    cbsa,
-    COUNT(*) AS source_rows
-FROM raw_businesses
-WHERE NULLIF(trim(cbsa), '') IS NOT NULL
-GROUP BY cbsa
-HAVING COUNT(DISTINCT (cbsa_name, micropolitan, lower(trim(outlying)))) > 1
-ORDER BY cbsa;
-
 WITH metro_source AS (
     SELECT DISTINCT ON (cbsa)
         cbsa,
         cbsa_name,
         micropolitan,
         CASE lower(trim(outlying))
-            WHEN 'true' THEN TRUE
-            WHEN 't' THEN TRUE
-            WHEN 'yes' THEN TRUE
-            WHEN 'y' THEN TRUE
-            WHEN '1' THEN TRUE
-            WHEN 'false' THEN FALSE
-            WHEN 'f' THEN FALSE
-            WHEN 'no' THEN FALSE
-            WHEN 'n' THEN FALSE
-            WHEN '0' THEN FALSE
+            WHEN 'outlying' THEN TRUE
+            WHEN 'central' THEN FALSE
             ELSE NULL
-        END AS outlying
+        END AS is_outlying
     FROM raw_businesses
     WHERE NULLIF(trim(cbsa), '') IS NOT NULL
     ORDER BY cbsa, row_id
@@ -33,18 +16,18 @@ INSERT INTO metro_areas (
     cbsa,
     cbsa_name,
     micropolitan,
-    outlying
+    is_outlying
 )
 SELECT
     cbsa,
     cbsa_name,
     micropolitan,
-    outlying
+    is_outlying
 FROM metro_source
 ON CONFLICT (cbsa) DO UPDATE SET
     cbsa_name = EXCLUDED.cbsa_name,
     micropolitan = EXCLUDED.micropolitan,
-    outlying = EXCLUDED.outlying;
+    is_outlying = EXCLUDED.is_outlying;
 
 INSERT INTO businesses (
     raw_row_id,
@@ -52,7 +35,6 @@ INSERT INTO businesses (
     year,
     source_id,
     annual_id,
-    abb_id,
     business_name,
     category
     -- org_cat
@@ -63,7 +45,6 @@ SELECT
     year,
     id,
     annual_id,
-    abb_id,
     business_name,
     category
     -- org_cat
